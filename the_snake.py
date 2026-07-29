@@ -37,6 +37,7 @@ class GameObject:
         self.body_color = body_color
 
     def draw(self):
+        """Заглушка"""
         pass
 
 
@@ -48,11 +49,13 @@ class Apple(GameObject):
         self.randomize_position()
 
     def randomize_position(self):
+        """Генерация случайного положения"""
         grid_x = randint(0, GRID_WIDTH - 1)
         grid_y = randint(0, GRID_HEIGHT - 1)
         self.position = (grid_x * GRID_SIZE, grid_y * GRID_SIZE)
 
     def draw(self) -> None:
+        """Отрисовка"""
         rect = pygame.Rect(self.position, (GRID_SIZE, GRID_SIZE))
         pygame.draw.rect(screen, self.body_color, rect)
         pygame.draw.rect(screen, BORDER_COLOR, rect, 1)
@@ -64,10 +67,7 @@ class Snake(GameObject):
     def __init__(self):
         start_x = GRID_WIDTH // 2 * GRID_SIZE
         start_y = GRID_HEIGHT // 2 * GRID_SIZE
-        
-        # Передаем стартовую позицию только для соблюдения сигнатуры базового класса
         super().__init__(position=(start_x, start_y), body_color=SNAKE_COLOR)
-        
         self.length: int = 1
         self.positions: list[tuple[int, int]] = [(start_x, start_y)]
         self.direction = RIGHT
@@ -75,15 +75,15 @@ class Snake(GameObject):
         self.last = None
 
     def get_head_position(self) -> tuple[int, int]:
+        """Получение позиции головы змейки"""
         return self.positions[0]
 
     def move(self) -> None:
+        """Обработка движения змейки"""
         current_x, current_y = self.get_head_position()
         dx, dy = self.direction
-        
         new_x = (current_x + dx * GRID_SIZE) % SCREEN_WIDTH
         new_y = (current_y + dy * GRID_SIZE) % SCREEN_HEIGHT
-        
         new_head = (new_x, new_y)
 
         # Сохраняем хвост перед изменением списка для корректной очистки экрана
@@ -98,6 +98,7 @@ class Snake(GameObject):
             self.positions.pop()
 
     def update_direction(self) -> None:
+        """Обновление напарвления движения"""
         if self.next_direction:
             opposite_checks = {
                 UP: DOWN,
@@ -105,17 +106,17 @@ class Snake(GameObject):
                 LEFT: RIGHT,
                 RIGHT: LEFT
             }
-            
             if self.next_direction != opposite_checks[self.direction]:
                 self.direction = self.next_direction
-            
             self.next_direction = None
 
     def reset(self) -> None:
-        """Возвращает змейку в начальное состояние после столкновения с собой."""
+        """
+        Возвращает змейку в начальное состояние
+        после столкновения с собой.
+        """
         start_x = GRID_WIDTH // 2 * GRID_SIZE
         start_y = GRID_HEIGHT // 2 * GRID_SIZE
-        
         self.length = 1
         self.positions = [(start_x, start_y)]
         self.direction = choice(ALL_DIRECTIONS)
@@ -123,7 +124,7 @@ class Snake(GameObject):
         self.last = None
 
     def draw(self):
-        # Затираем старый хвост цветом фона ДО отрисовки новых сегментов
+        """Затираем старый хвост цветом фона ДО отрисовки новых сегментов"""
         if self.last:
             last_rect = pygame.Rect(self.last, (GRID_SIZE, GRID_SIZE))
             pygame.draw.rect(screen, BOARD_BACKGROUND_COLOR, last_rect)
@@ -140,13 +141,17 @@ class Snake(GameObject):
         pygame.draw.rect(screen, BORDER_COLOR, head_rect, 1)
 
     def check_self_collision(self) -> bool:
-        """Проверяет столкновение головы с телом. Возвращает True при столкновении."""
+        """
+        Проверяет столкновение головы с телом.
+        Возвращает True при столкновении.
+        """
         head = self.get_head_position()
         # Проверяем пересечение головы со всеми сегментами, начиная со второго
         return head in self.positions[1:]
 
 
 def handle_keys(game_object):
+    """Обработка нажатия клавиш"""
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
@@ -163,6 +168,7 @@ def handle_keys(game_object):
 
 
 def main():
+    """Запуск"""
     snake = Snake()
     apple = Apple()
 
@@ -172,13 +178,10 @@ def main():
 
         # 1. Обработка ввода пользователя
         handle_keys(snake)
-        
         # 2. Применение выбранного направления
         snake.update_direction()
-        
         # 3. Перемещение змейки
         snake.move()
-
         # 4. Проверка съеденного яблока
         if snake.get_head_position() == apple.position:
             snake.length += 1
@@ -187,23 +190,18 @@ def main():
                 apple.randomize_position()
                 if apple.position not in snake.positions:
                     break
-
         # 5. Проверка столкновения с собой
         if snake.check_self_collision():
             snake.reset()
             # Очищаем экран полностью перед новой игрой
             screen.fill(BOARD_BACKGROUND_COLOR)
-
         # 6. Отрисовка всех объектов
-        # Фон можно не заливать каждый кадр, если затирание tail работает идеально,
-        # но заливка гарантирует отсутствие артефактов на старте или после ошибок логики.
-        screen.fill(BOARD_BACKGROUND_COLOR) 
-        
+        screen.fill(BOARD_BACKGROUND_COLOR)
         apple.draw()
         snake.draw()
-        
         # 7. Обновление изображения на экране
         pygame.display.update()
+
 
 if __name__ == '__main__':
     main()
