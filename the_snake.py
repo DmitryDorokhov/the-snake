@@ -1,144 +1,154 @@
-from random import choice, randint
-
+from random import randint
 import pygame
 
-# Константы для размеров поля и сетки:
 SCREEN_WIDTH, SCREEN_HEIGHT = 640, 480
 GRID_SIZE = 20
-GRID_WIDTH = SCREEN_WIDTH // GRID_SIZE
-GRID_HEIGHT = SCREEN_HEIGHT // GRID_SIZE
 
-# Координаты центра игрового поля (в индексах ячеек)
-CENTER_GRID_X = GRID_WIDTH // 2
-CENTER_GRID_Y = GRID_HEIGHT // 2
-CENTER_GRID = (CENTER_GRID_X, CENTER_GRID_Y)
+# Координаты центра экрана в пикселях (выровнены по сетке)
+CENTER_X = SCREEN_WIDTH // 2 - (SCREEN_WIDTH // 2) % GRID_SIZE
+CENTER_Y = SCREEN_HEIGHT // 2 - (SCREEN_HEIGHT // 2) % GRID_SIZE
 
 CELL_BORDER_THICKNESS = 1
-
-# Направления движения:
 UP = (0, -1)
 DOWN = (0, 1)
 LEFT = (-1, 0)
 RIGHT = (1, 0)
 ALL_DIRECTIONS = [UP, DOWN, LEFT, RIGHT]
-
-# Цвета:
 BOARD_BACKGROUND_COLOR = (0, 0, 0)
 BORDER_COLOR = (93, 216, 228)
 APPLE_COLOR = (255, 0, 0)
 SNAKE_COLOR = (0, 255, 0)
-
-# Скорость игрового цикла (кадров в секунду):
 SPEED = 7
 
-# Настройка PyGame:
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), 0, 32)
+screen = pygame.display.set_mode(
+    (SCREEN_WIDTH, SCREEN_HEIGHT), 0, 32
+)
 pygame.display.set_caption('Змейка')
 clock = pygame.time.Clock()
 
 
 class GameObject:
-    """Базовый класс, который хранит общие свойства игровых объектов."""
+    """Базовый класс для всех объектов на игровом поле.
+
+    Предоставляет общие свойства позиции и цвета, а также утилитарный метод
+    отрисовки одной клетки с рамкой.
+    """
 
     def __init__(self, position=(0, 0), body_color=None):
+        """Инициализирует объект.
+
+        Args:
+            position: Кортеж координат (x, y) в пикселях.
+            body_color: Цвет заливки объекта в формате RGB.
+        """
         self.position = position
         self.body_color = body_color
 
-    def _draw_cell(self, surface, fill_color, border_color=BORDER_COLOR):
-        """
-        Универсальный метод отрисовки одной ячейки на заданной поверхности.
-        :param surface: Поверхность Pygame для отрисовки.
-        :param fill_color: Цвет заливки прямоугольника.
-        :param border_color: Цвет рамки (по умолчанию BORDER_COLOR).
+    def _draw_cell(
+            self,
+            surface,
+            fill_color,
+            border=True,
+            border_color=BORDER_COLOR):
+        """Отрисовывает одну клетку игрового поля.
+
+        Args:
+            surface: Поверхность Pygame для рисования.
+            fill_color: Цвет заливки клетки.
+            border: Флаг, указывающий, нужно ли рисовать рамку.
+            border_color: Цвет рамки клетки.
         """
         rect = pygame.Rect(self.position, (GRID_SIZE, GRID_SIZE))
         pygame.draw.rect(surface, fill_color, rect)
-        pygame.draw.rect(surface, border_color, rect, CELL_BORDER_THICKNESS)
+        if border:
+            pygame.draw.rect(
+                surface, border_color, rect, CELL_BORDER_THICKNESS
+            )
 
     def draw(self):
-        """Заглушка"""
+        """Отрисовывает объект на экране.
+
+        Должен быть переопределен в дочерних классах.
+        """
         pass
 
 
 class Apple(GameObject):
-    """Класс яблока."""
+    """Класс яблока, представляющего еду для змейки."""
 
-    def __init__(self, occupied_positions=None):
+    def __init__(self):
+        """Создает экземпляр яблока с заданным цветом."""
         super().__init__(body_color=APPLE_COLOR)
-        if occupied_positions:
-            self.occupied_cells = {
-                (pos[0] // GRID_SIZE, pos[1] // GRID_SIZE)
-                for pos in occupied_positions
-            }
-        else:
-            self.occupied_cells = set()
-        self.randomize_position()
+        self.position = (0, 0)
 
-    def randomize_position(self):
-        """Генерация случайного положения свободного от змейки."""
-        total_cells = GRID_WIDTH * GRID_HEIGHT
-        if len(self.occupied_cells) >= total_cells:
-            return
+    def set_position(self, pixel_pos):
+        """Устанавливает новую позицию яблока.
 
-        while True:
-            grid_x = randint(0, GRID_WIDTH - 1)
-            grid_y = randint(0, GRID_HEIGHT - 1)
+        Args:
+            pixel_pos: Новые координаты (x, y) в пикселях.
+        """
+        self.position = pixel_pos
 
-            if (grid_x, grid_y) not in self.occupied_cells:
-                break
-
-        self.position = (grid_x * GRID_SIZE, grid_y * GRID_SIZE)
-
-    def update_occupied(self, snake_positions):
-        """Обновляет карту занятых клеток перед следующей генерацией."""
-        self.occupied_cells.clear()
-        for pos in snake_positions:
-            self.occupied_cells.add((pos[0] // GRID_SIZE, pos[1] // GRID_SIZE))
-
-    def draw(self) -> None:
-        """Отрисовка яблока с использованием метода родителя"""
+    def draw(self):
+        """Отрисовывает яблоко на игровой поверхности."""
         self._draw_cell(screen, self.body_color)
 
 
 class Snake(GameObject):
-    """Класс змейки."""
+    """Класс змейки, управляемой игроком.
+
+    Управляет массивом позиций сегментов, направлением движения,
+    проверкой коллизий и логикой роста.
+    """
 
     def __init__(self):
-        # Преобразуем центральные индексы сетки в пиксели
-        start_x = CENTER_GRID[0] * GRID_SIZE
-        start_y = CENTER_GRID[1] * GRID_SIZE
-        super().__init__(position=(start_x, start_y), body_color=SNAKE_COLOR)
-        self.length: int = 1
-        self.positions: list[tuple[int, int]] = [(start_x, start_y)]
+        """Инициализирует змейку в центре экрана со стартовой длиной 1."""
+        super().__init__(
+            position=(CENTER_X, CENTER_Y),
+            body_color=SNAKE_COLOR
+        )
+        self.length = 1
+        self.positions = [(CENTER_X, CENTER_Y)]
         self.direction = RIGHT
         self.next_direction = None
         self.last = None
 
-    def get_head_position(self) -> tuple[int, int]:
-        """Получение позиции головы змейки"""
+    def get_head_position(self):
+        """Возвращает текущие координаты головы змейки.
+
+        Returns:
+            Кортеж координат (x, y) первого сегмента.
+        """
         return self.positions[0]
 
-    def move(self) -> None:
-        """Обработка движения змейки"""
+    def move(self):
+        """Перемещает змейку на один шаг вперед.
+
+        Добавляет новую голову в направлении движения и удаляет хвост,
+        если длина массива превышает лимит `self.length`.
+        """
         current_x, current_y = self.get_head_position()
         dx, dy = self.direction
         new_x = (current_x + dx * GRID_SIZE) % SCREEN_WIDTH
         new_y = (current_y + dy * GRID_SIZE) % SCREEN_HEIGHT
         new_head = (new_x, new_y)
 
-        # Сохраняем хвост перед изменением списка для корректной очистки экрана
+        # Определяем позицию хвоста ДО вставки новой головы
         if len(self.positions) > self.length:
             self.last = self.positions[-1]
-        else:
-            self.last = None
 
+        # Вставляем новую голову
         self.positions.insert(0, new_head)
 
+        # Обрезаем очередь только если она превысила лимит длины.
         if len(self.positions) > self.length:
             self.positions.pop()
 
-    def update_direction(self) -> None:
-        """Обновление направления движения"""
+    def update_direction(self):
+        """Обновляет направление движения на основе ввода пользователя.
+
+        Защищает от разворота змейки на 180 градусов.
+        """
         if self.next_direction:
             opposite_checks = {
                 UP: DOWN,
@@ -150,51 +160,65 @@ class Snake(GameObject):
                 self.direction = self.next_direction
             self.next_direction = None
 
-    def reset(self) -> None:
-        """
-        Возвращает змейку в начальное состояние
-        после столкновения с собой.
-        """
-        start_x = CENTER_GRID[0] * GRID_SIZE
-        start_y = CENTER_GRID[1] * GRID_SIZE
+    def reset(self):
+        """Сбрасывает состояние змейки к начальным значениям после смерти."""
         self.length = 1
-        self.positions = [(start_x, start_y)]
-        self.direction = choice(ALL_DIRECTIONS)
+        self.positions = [(CENTER_X, CENTER_Y)]
+        self.direction = RIGHT
         self.next_direction = None
         self.last = None
 
-    def _draw_snake_segments(self, positions_list):
-        """Вспомогательный метод для отрисовки группы сегментов."""
-        for position in positions_list:
-            old_pos = self.position
-            self.position = position
-            self._draw_cell(screen, self.body_color)
-            self.position = old_pos
+    def check_self_collision(self):
+        """Проверяет столкновение головы змейки с её собственным телом.
+
+        Returns:
+            True, если произошло столкновение, иначе False.
+        """
+        head = self.positions[0]
+        return head in self.positions[1:]
 
     def draw(self):
-        """Отрисовка змейки с очисткой хвоста"""
-        if self.last:
-            tail_rect = pygame.Rect(self.last, (GRID_SIZE, GRID_SIZE))
-            pygame.draw.rect(screen, BOARD_BACKGROUND_COLOR, tail_rect)
+        """Отрисовывает всю змейку на экране.
 
+        Выполняет три действия:
+        1. Стирает старый хвост фоном.
+        2. Рисует тело змейки (все сегменты, кроме головы).
+        3. Рисует голову поверх тела.
+        """
+        # 1. Стираем ТОЛЬКО самый последний хвост, если змейка не росла
+        if self.last and len(self.positions) > 1:
+            old_pos = self.position
+            self.position = self.last
+            self._draw_cell(
+                screen, BOARD_BACKGROUND_COLOR, border=False
+            )
+            self.position = old_pos
+
+        # 2. Рисуем всё тело (кроме головы)
         if len(self.positions) > 1:
-            self._draw_snake_segments(self.positions[1:])
+            for pos in self.positions[1:]:
+                old_pos = self.position
+                self.position = pos
+                self._draw_cell(screen, self.body_color, border=True)
+                self.position = old_pos
 
+        # 3. Рисуем голову поверх всего
         if self.positions:
             head_pos = self.positions[0]
             old_pos = self.position
             self.position = head_pos
-            self._draw_cell(screen, self.body_color)
+            self._draw_cell(screen, self.body_color, border=True)
             self.position = old_pos
-
-    def check_self_collision(self) -> bool:
-        """Проверяет столкновение головы с телом."""
-        head = self.get_head_position()
-        return head in self.positions[1:]
 
 
 def handle_keys(game_object):
-    """Обработка нажатия клавиш"""
+    """Обрабатывает события очереди Pygame (клавиатура и закрытие окна).
+
+    Устанавливает следующее направление движения для переданного объекта.
+
+    Args:
+        game_object: Объект (обычно Snake), чье направление нужно изменить.
+    """
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
@@ -210,32 +234,68 @@ def handle_keys(game_object):
                 game_object.next_direction = RIGHT
 
 
+def find_free_position(snake_positions):
+    """Находит случайную свободную ячейку на сетке, не занятую змейкой.
+
+    Args:
+        snake_positions: Список кортежей координат, занятых змейкой.
+
+    Returns:
+        Кортеж координат (x, y) свободной ячейки в пикселях.
+    """
+    occupied = {
+        (pos[0] // GRID_SIZE, pos[1] // GRID_SIZE)
+        for pos in snake_positions
+    }
+
+    while True:
+        grid_x = randint(0, SCREEN_WIDTH // GRID_SIZE - 1)
+        grid_y = randint(0, SCREEN_HEIGHT // GRID_SIZE - 1)
+
+        if (grid_x, grid_y) not in occupied:
+            return (grid_x * GRID_SIZE, grid_y * GRID_SIZE)
+
+
 def main():
-    """Запуск"""
+    """Главная функция игры.
+
+    Инициализирует объекты, содержит основной игровой цикл,
+    обрабатывает логику столкновений и обновляет экран.
+    """
     snake = Snake()
-    apple = Apple(snake.positions)
+    apple = Apple()
+
+    apple.set_position(find_free_position(snake.positions))
 
     while True:
         clock.tick(SPEED)
-
-        # Очистка всего экрана одним цветом (вместо ручной очистки хвоста)
+        # Отрисовка фона необходима для очистки следов при поворотах
         screen.fill(BOARD_BACKGROUND_COLOR)
 
         handle_keys(snake)
         snake.update_direction()
-        snake.move()
 
-        if snake.get_head_position() == apple.position:
-            snake.length += 1
-            apple.update_occupied(snake.positions)
-            apple.randomize_position()
-
+        # Проверяем смерть
         if snake.check_self_collision():
             snake.reset()
-            apple.update_occupied(snake.positions)
-            apple.randomize_position()
+            apple.set_position(find_free_position(snake.positions))
+        else:
+            # Проверяем поедание яблока
+            if snake.positions[0] == apple.position:
+                snake.length += 1
 
-        # Теперь порядок отрисовки важен: сначала яблоко, потом змейка
+                # Очищаем место съеденного яблока
+                old_pos = snake.position
+                snake.position = apple.position
+                snake._draw_cell(
+                    screen, BOARD_BACKGROUND_COLOR, border=False
+                )
+                snake.position = old_pos
+
+                apple.set_position(find_free_position(snake.positions))
+
+            snake.move()
+
         apple.draw()
         snake.draw()
         pygame.display.update()
