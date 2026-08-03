@@ -74,10 +74,10 @@ class Apple(GameObject):
     @staticmethod
     def _get_random_grid_position(occupied_positions):
         """Находит случайную свободную ячейку на сетке.
-        
+
         Args:
             occupied_positions: Множество занятых ячеек в координатах сетки.
-            
+
         Returns:
             Кортеж координат (grid_x, grid_y).
         """
@@ -88,17 +88,13 @@ class Apple(GameObject):
                 return grid_x, grid_y
 
     def randomize_position(self, snake_positions):
-        """Устанавливает новую позицию яблока, избегая тела змейки.
-        
-        Args:
-            snake_positions: Список кортежей координат сегментов змейки в пикселях.
-        """
+        """Устанавливает новую позицию яблока, избегая тела змейки."""
         # Переводим пиксельные координаты змейки в сетку
         occupied = {
             (pos[0] // GRID_SIZE, pos[1] // GRID_SIZE)
             for pos in snake_positions
         }
-        
+
         grid_x, grid_y = self._get_random_grid_position(occupied)
         self.position = (grid_x * GRID_SIZE, grid_y * GRID_SIZE)
 
