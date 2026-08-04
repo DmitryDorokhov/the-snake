@@ -1,5 +1,4 @@
 from random import randint
-
 import pygame
 
 SCREEN_WIDTH, SCREEN_HEIGHT = 640, 480
@@ -45,18 +44,32 @@ class GameObject:
         self.position = position
         self.body_color = body_color
 
+    def _clear_cell(self, border=True):
+        """
+        Очищает одну клетку игрового поля цветом фона
+        с рамкой или без неё.
+        """
+        rect = pygame.Rect(self.position, (GRID_SIZE, GRID_SIZE))
+        pygame.draw.rect(screen, BOARD_BACKGROUND_COLOR, rect)
+        if border:
+            pygame.draw.rect(
+                screen, BOARD_BACKGROUND_COLOR, rect, CELL_BORDER_THICKNESS
+            )
+
     def _draw_cell(
             self,
-            surface,
             fill_color,
             border=True,
             border_color=BORDER_COLOR):
-        """Отрисовывает одну клетку игрового поля."""
+        """Отрисовывает одну клетку игрового поля.
+        Поверхность больше не передается как аргумент,
+        используется глобальный экран.
+        """
         rect = pygame.Rect(self.position, (GRID_SIZE, GRID_SIZE))
-        pygame.draw.rect(surface, fill_color, rect)
+        pygame.draw.rect(screen, fill_color, rect)
         if border:
             pygame.draw.rect(
-                surface, border_color, rect, CELL_BORDER_THICKNESS
+                screen, border_color, rect, CELL_BORDER_THICKNESS
             )
 
     def draw(self):
@@ -72,36 +85,41 @@ class Apple(GameObject):
         super().__init__(body_color=APPLE_COLOR)
         self.position = (0, 0)
 
+    # Новый метод-алиас для совместимости с тестами
+    def randomize_position(self, occupied_positions):
+        """Псевдоним для place_on_free_spot, требуемый тестами."""
+        return self.place_on_free_spot(occupied_positions)
+
     @staticmethod
     def _get_random_grid_position(occupied_positions):
-        """Находит случайную свободную ячейку на сетке.
-
-        Args:
-            occupied_positions: Множество занятых ячеек в координатах сетки.
-
-        Returns:
-            Кортеж координат (grid_x, grid_y).
-        """
+        """Находит случайную свободную ячейку на сетке."""
         while True:
-            grid_x = randint(0, GRID_WIDTH - 1)
-            grid_y = randint(0, GRID_HEIGHT - 1)
-            if (grid_x, grid_y) not in occupied_positions:
-                return grid_x, grid_y
+            # Генерируем сразу пиксельные координаты, выровненные по сетке
+            x = randint(0, GRID_WIDTH - 1) * GRID_SIZE
+            y = randint(0, GRID_HEIGHT - 1) * GRID_SIZE
+            if (x, y) not in occupied_positions:
+                return x, y
 
-    def randomize_position(self, snake_positions):
-        """Устанавливает новую позицию яблока, избегая тела змейки."""
-        # Переводим пиксельные координаты змейки в сетку
-        occupied = {
-            (pos[0] // GRID_SIZE, pos[1] // GRID_SIZE)
-            for pos in snake_positions
-        }
+    def place_on_free_spot(self, snake_positions):
+        """Устанавливает новую позицию яблока, избегая тела змейки.
 
-        grid_x, grid_y = self._get_random_grid_position(occupied)
-        self.position = (grid_x * GRID_SIZE, grid_y * GRID_SIZE)
+        Проверка выполняется напрямую по списку пиксельных координат змейки,
+        без перевода в систему сетки.
+        Перед установкой новой позиции очищает старую.
+        """
+        old_position = self.position
+        apple_x, apple_y = self._get_random_grid_position(snake_positions)
+        self.position = (apple_x, apple_y)
+
+        # Очищаем место, где яблоко находилось ранее
+        temp_pos = self.position
+        self.position = old_position
+        self._clear_cell()
+        self.position = temp_pos
 
     def draw(self):
         """Отрисовывает яблоко на игровой поверхности."""
-        self._draw_cell(screen, self.body_color)
+        self._draw_cell(self.body_color)
 
 
 class Snake(GameObject):
@@ -118,18 +136,28 @@ class Snake(GameObject):
         self.direction = RIGHT
         self.next_direction = None
         self.last = None
+        self.grow_pending = False
 
     def get_head_position(self):
         """Возвращает текущие координаты головы змейки."""
         return self.positions[0]
 
     def move(self):
-        """Перемещает змейку на один шаг вперед."""
+        """
+        Перемещает змейку на один шаг вперед
+        и очищает освободившийся хвост.
+        """
         current_x, current_y = self.get_head_position()
         dx, dy = self.direction
         new_x = (current_x + dx * GRID_SIZE) % SCREEN_WIDTH
         new_y = (current_y + dy * GRID_SIZE) % SCREEN_HEIGHT
         new_head = (new_x, new_y)
+
+        # Очищаем фон под текущей головой перед её смещением
+        temp_pos = self.position
+        self.position = (current_x, current_y)
+        self._clear_cell(border=False)
+        self.position = temp_pos
 
         # Определяем позицию хвоста ДО вставки новой головы
         if len(self.positions) >= self.length:
@@ -137,9 +165,17 @@ class Snake(GameObject):
 
         self.positions.insert(0, new_head)
 
-        # Обрезаем очередь только если она превысила лимит длины
-        if len(self.positions) > self.length:
-            self.positions.pop()
+        if len(self.positions) > self.length and not self.grow_pending:
+            tail_to_clear = self.positions.pop()
+
+            # Очищаем фон под отсоединившимся хвостом вместе с рамкой
+            temp_pos = self.position
+            self.position = tail_to_clear
+            self._clear_cell(border=True)
+            self.position = temp_pos
+
+        # Сбрасываем флаг роста после применения
+        self.grow_pending = False
 
     def update_direction(self):
         """Обновляет направление движения на основе ввода пользователя."""
@@ -150,47 +186,58 @@ class Snake(GameObject):
                 LEFT: RIGHT,
                 RIGHT: LEFT
             }
+            # Логика проверки противоположности перенесена сюда из handle_keys
             if self.next_direction != opposite_checks[self.direction]:
                 self.direction = self.next_direction
+            # Сбрасываем команду, чтобы она не применилась повторно
             self.next_direction = None
 
     def reset(self):
         """Сбрасывает состояние змейки к начальным значениям после смерти."""
+        # Полностью стираем тело старой змейки перед сбросом координат
+        for pos in self.positions:
+            temp_pos = self.position
+            self.position = pos
+            self._clear_cell(border=True)
+            self.position = temp_pos
+
         self.length = 1
         self.positions = [(CENTER_X, CENTER_Y)]
         self.direction = RIGHT
         self.next_direction = None
         self.last = None
+        self.grow_pending = False
 
     def check_self_collision(self):
         """Проверяет столкновение головы змейки с её собственным телом."""
         head = self.positions[0]
         return head in self.positions[1:]
 
+    def grow(self):
+        """
+        Увеличивает целевую длину змейки.
+        Рост произойдет после следующего хода.
+        """
+        self.length += 1
+        self.grow_pending = True
+
     def draw(self):
-        """Отрисовывает всю змейку на экране."""
-        # Стираем ТОЛЬКО самый последний хвост, если змейка не росла
-        if self.last and len(self.positions) > self.length:
-            tail_to_erase = self.last
-            temp_pos = self.position
-            self.position = tail_to_erase
-            self._draw_cell(screen, BOARD_BACKGROUND_COLOR, border=False)
-            self.position = temp_pos
+        """Отрисовывает змейку на экране."""
+        # Рисуем голову (выполняется всегда)
+        head_pos = self.positions[0]
+        temp_pos = self.position
+        self.position = head_pos
+        self._draw_cell(self.body_color, border=True)
+        self.position = temp_pos
 
-        # Рисуем всё тело (кроме головы)
-        if len(self.positions) > 1:
-            for pos in self.positions[1:]:
-                temp_pos = self.position
-                self.position = pos
-                self._draw_cell(screen, self.body_color, border=True)
-                self.position = temp_pos
-
-        # Рисуем голову поверх всего
-        if self.positions:
-            head_pos = self.positions[0]
+        # Рисуем всё остальное тело, если оно есть.
+        # При съедании яблока length увеличивается,
+        # pop() в move() не срабатывает,
+        # последний элемент остается в self.positions и рисуется здесь.
+        for pos in self.positions[1:]:
             temp_pos = self.position
-            self.position = head_pos
-            self._draw_cell(screen, self.body_color, border=True)
+            self.position = pos
+            self._draw_cell(self.body_color, border=True)
             self.position = temp_pos
 
 
@@ -201,13 +248,13 @@ def handle_keys(game_object):
             pygame.quit()
             raise SystemExit
         elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_UP and game_object.direction != DOWN:
+            if event.key == pygame.K_UP:
                 game_object.next_direction = UP
-            elif event.key == pygame.K_DOWN and game_object.direction != UP:
+            elif event.key == pygame.K_DOWN:
                 game_object.next_direction = DOWN
-            elif event.key == pygame.K_LEFT and game_object.direction != RIGHT:
+            elif event.key == pygame.K_LEFT:
                 game_object.next_direction = LEFT
-            elif event.key == pygame.K_RIGHT and game_object.direction != LEFT:
+            elif event.key == pygame.K_RIGHT:
                 game_object.next_direction = RIGHT
 
 
@@ -216,11 +263,15 @@ def main():
     snake = Snake()
     apple = Apple()
 
+    # Вызов переименованного метода
     apple.randomize_position(snake.positions)
 
     while True:
         clock.tick(SPEED)
-        screen.fill(BOARD_BACKGROUND_COLOR)
+
+        # Глобальная заливка экрана удалена согласно замечанию.
+        # Экран очищается точечно при движении объектов.
+        # screen.fill(BOARD_BACKGROUND_COLOR)
 
         handle_keys(snake)
         snake.update_direction()
@@ -228,14 +279,13 @@ def main():
         # Проверяем смерть
         if snake.check_self_collision():
             snake.reset()
-            apple.randomize_position(snake.positions)
-        else:
-            # Проверяем поедание яблока
-            if snake.positions[0] == apple.position:
-                snake.length += 1
-                apple.randomize_position(snake.positions)
+            apple.place_on_free_spot(snake.positions)
+        # Используем отдельный метод получения позиции головы
+        elif snake.get_head_position() == apple.position:
+            snake.grow()
+            apple.place_on_free_spot(snake.positions)
 
-            snake.move()
+        snake.move()
 
         apple.draw()
         snake.draw()
