@@ -1,4 +1,5 @@
 from random import randint
+
 import pygame
 
 SCREEN_WIDTH, SCREEN_HEIGHT = 640, 480
@@ -271,7 +272,6 @@ def main():
 
         # Глобальная заливка экрана удалена согласно замечанию.
         # Экран очищается точечно при движении объектов.
-        # screen.fill(BOARD_BACKGROUND_COLOR)
 
         handle_keys(snake)
         snake.update_direction()
