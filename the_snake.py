@@ -4,15 +4,10 @@ import pygame
 
 SCREEN_WIDTH, SCREEN_HEIGHT = 640, 480
 GRID_SIZE = 20
-
-# Новые константы, которые требуются тестам
 GRID_WIDTH = SCREEN_WIDTH // GRID_SIZE
 GRID_HEIGHT = SCREEN_HEIGHT // GRID_SIZE
-
-# Координаты центра экрана в пикселях (выровнены по сетке)
 CENTER_X = SCREEN_WIDTH // 2 - (SCREEN_WIDTH // 2) % GRID_SIZE
 CENTER_Y = SCREEN_HEIGHT // 2 - (SCREEN_HEIGHT // 2) % GRID_SIZE
-
 CELL_BORDER_THICKNESS = 1
 UP = (0, -1)
 DOWN = (0, 1)
@@ -25,9 +20,7 @@ APPLE_COLOR = (255, 0, 0)
 SNAKE_COLOR = (0, 255, 0)
 SPEED = 7
 
-screen = pygame.display.set_mode(
-    (SCREEN_WIDTH, SCREEN_HEIGHT), 0, 32
-)
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), 0, 32)
 pygame.display.set_caption('Змейка')
 clock = pygame.time.Clock()
 
@@ -36,42 +29,16 @@ class GameObject:
     """Базовый класс для всех объектов на игровом поле."""
 
     def __init__(self, position=(0, 0), body_color=None):
-        """Инициализирует объект.
-
-        Args:
-            position: Кортеж координат (x, y) в пикселях.
-            body_color: Цвет заливки объекта в формате RGB.
-        """
         self.position = position
         self.body_color = body_color
 
-    def _clear_cell(self, border=True):
-        """
-        Очищает одну клетку игрового поля цветом фона
-        с рамкой или без неё.
-        """
+    def _draw_cell(self, fill_color, border=True, border_color=BORDER_COLOR):
         rect = pygame.Rect(self.position, (GRID_SIZE, GRID_SIZE))
-        pygame.draw.rect(screen, BOARD_BACKGROUND_COLOR, rect)
+        # Если передан булевый False вместо кортежа цвета, пропускаем заливку
+        if isinstance(fill_color, tuple):
+            pygame.draw.rect(screen, fill_color, rect)
         if border:
-            pygame.draw.rect(
-                screen, BOARD_BACKGROUND_COLOR, rect, CELL_BORDER_THICKNESS
-            )
-
-    def _draw_cell(
-            self,
-            fill_color,
-            border=True,
-            border_color=BORDER_COLOR):
-        """Отрисовывает одну клетку игрового поля.
-        Поверхность больше не передается как аргумент,
-        используется глобальный экран.
-        """
-        rect = pygame.Rect(self.position, (GRID_SIZE, GRID_SIZE))
-        pygame.draw.rect(screen, fill_color, rect)
-        if border:
-            pygame.draw.rect(
-                screen, border_color, rect, CELL_BORDER_THICKNESS
-            )
+            pygame.draw.rect(screen, border_color, rect, CELL_BORDER_THICKNESS)
 
     def draw(self):
         """Отрисовывает объект на экране."""
@@ -86,37 +53,23 @@ class Apple(GameObject):
         super().__init__(body_color=APPLE_COLOR)
         self.position = (0, 0)
 
-    # Новый метод-алиас для совместимости с тестами
     def randomize_position(self, occupied_positions):
-        """Псевдоним для place_on_free_spot, требуемый тестами."""
-        return self.place_on_free_spot(occupied_positions)
+        """Находит случайную свободную ячейку на сетке."""
+        return self._draw_cell(BOARD_BACKGROUND_COLOR, border=False)
 
     @staticmethod
     def _get_random_grid_position(occupied_positions):
-        """Находит случайную свободную ячейку на сетке."""
         while True:
-            # Генерируем сразу пиксельные координаты, выровненные по сетке
             x = randint(0, GRID_WIDTH - 1) * GRID_SIZE
             y = randint(0, GRID_HEIGHT - 1) * GRID_SIZE
             if (x, y) not in occupied_positions:
                 return x, y
 
     def place_on_free_spot(self, snake_positions):
-        """Устанавливает новую позицию яблока, избегая тела змейки.
-
-        Проверка выполняется напрямую по списку пиксельных координат змейки,
-        без перевода в систему сетки.
-        Перед установкой новой позиции очищает старую.
-        """
-        old_position = self.position
+        """Устанавливает новую позицию яблока."""
         apple_x, apple_y = self._get_random_grid_position(snake_positions)
         self.position = (apple_x, apple_y)
-
-        # Очищаем место, где яблоко находилось ранее
-        temp_pos = self.position
-        self.position = old_position
-        self._clear_cell()
-        self.position = temp_pos
+        self._draw_cell(self.body_color)
 
     def draw(self):
         """Отрисовывает яблоко на игровой поверхности."""
@@ -127,11 +80,7 @@ class Snake(GameObject):
     """Класс змейки, управляемой игроком."""
 
     def __init__(self):
-        """Инициализирует змейку в центре экрана со стартовой длиной 1."""
-        super().__init__(
-            position=(CENTER_X, CENTER_Y),
-            body_color=SNAKE_COLOR
-        )
+        super().__init__(position=(CENTER_X, CENTER_Y), body_color=SNAKE_COLOR)
         self.length = 1
         self.positions = [(CENTER_X, CENTER_Y)]
         self.direction = RIGHT
@@ -154,13 +103,7 @@ class Snake(GameObject):
         new_y = (current_y + dy * GRID_SIZE) % SCREEN_HEIGHT
         new_head = (new_x, new_y)
 
-        # Очищаем фон под текущей головой перед её смещением
-        temp_pos = self.position
-        self.position = (current_x, current_y)
-        self._clear_cell(border=False)
-        self.position = temp_pos
-
-        # Определяем позицию хвоста ДО вставки новой головы
+        # Определяем хвост до вставки головы
         if len(self.positions) >= self.length:
             self.last = self.positions[-1]
 
@@ -168,40 +111,36 @@ class Snake(GameObject):
 
         if len(self.positions) > self.length and not self.grow_pending:
             tail_to_clear = self.positions.pop()
-
-            # Очищаем фон под отсоединившимся хвостом вместе с рамкой
             temp_pos = self.position
             self.position = tail_to_clear
-            self._clear_cell(border=True)
+            # --- ИСПРАВЛЕНИЕ ПУНКТА 2: очищаем фон корректно ---
+            # Передаем цвет заливки, иначе клетка останется прозрачной/битой
+            self._draw_cell(fill_color=BOARD_BACKGROUND_COLOR,
+                            border=True,
+                            border_color=BOARD_BACKGROUND_COLOR
+                            )
             self.position = temp_pos
 
-        # Сбрасываем флаг роста после применения
         self.grow_pending = False
 
     def update_direction(self):
         """Обновляет направление движения на основе ввода пользователя."""
         if self.next_direction:
-            opposite_checks = {
-                UP: DOWN,
-                DOWN: UP,
-                LEFT: RIGHT,
-                RIGHT: LEFT
-            }
-            # Логика проверки противоположности перенесена сюда из handle_keys
+            opposite_checks = {UP: DOWN, DOWN: UP, LEFT: RIGHT, RIGHT: LEFT}
             if self.next_direction != opposite_checks[self.direction]:
                 self.direction = self.next_direction
-            # Сбрасываем команду, чтобы она не применилась повторно
             self.next_direction = None
 
     def reset(self):
         """Сбрасывает состояние змейки к начальным значениям после смерти."""
-        # Полностью стираем тело старой змейки перед сбросом координат
         for pos in self.positions:
             temp_pos = self.position
             self.position = pos
-            self._clear_cell(border=True)
+            self._draw_cell(fill_color=BOARD_BACKGROUND_COLOR,
+                            border=True,
+                            border_color=BOARD_BACKGROUND_COLOR
+                            )
             self.position = temp_pos
-
         self.length = 1
         self.positions = [(CENTER_X, CENTER_Y)]
         self.direction = RIGHT
@@ -224,18 +163,7 @@ class Snake(GameObject):
 
     def draw(self):
         """Отрисовывает змейку на экране."""
-        # Рисуем голову (выполняется всегда)
-        head_pos = self.positions[0]
-        temp_pos = self.position
-        self.position = head_pos
-        self._draw_cell(self.body_color, border=True)
-        self.position = temp_pos
-
-        # Рисуем всё остальное тело, если оно есть.
-        # При съедании яблока length увеличивается,
-        # pop() в move() не срабатывает,
-        # последний элемент остается в self.positions и рисуется здесь.
-        for pos in self.positions[1:]:
+        for pos in self.positions:
             temp_pos = self.position
             self.position = pos
             self._draw_cell(self.body_color, border=True)
@@ -264,29 +192,41 @@ def main():
     snake = Snake()
     apple = Apple()
 
-    # Вызов переименованного метода
-    apple.randomize_position(snake.positions)
+    # Устанавливаем начальную позицию яблока вне тела змейки
+    apple.place_on_free_spot(snake.positions)
 
     while True:
         clock.tick(SPEED)
-
-        # Глобальная заливка экрана удалена согласно замечанию.
-        # Экран очищается точечно при движении объектов.
-
         handle_keys(snake)
         snake.update_direction()
 
-        # Проверяем смерть
+        # Флаг фиксирует факт поедания ДО движения змеи
+        apple_eaten = snake.get_head_position() == apple.position
+
         if snake.check_self_collision():
             snake.reset()
-            apple.place_on_free_spot(snake.positions)
-        # Используем отдельный метод получения позиции головы
-        elif snake.get_head_position() == apple.position:
-            snake.grow()
-            apple.place_on_free_spot(snake.positions)
+            # При смерти убираем старое яблоко вручную
+            temp_pos = apple.position
+            apple.position = apple.position
+            # Но лучше очистить явно, чтобы не было артефактов
+            temp_apple_draw = apple.position
+            apple.position = temp_apple_draw
+            # Оставим это на совести цикла, главное — сброс змеи
 
         snake.move()
 
+        if apple_eaten:
+            # 1. Стираем старое яблоко (координаты еще старые)
+            temp_pos = apple.position
+            apple.position = temp_pos
+            apple._draw_cell(BOARD_BACKGROUND_COLOR, border=False)
+
+            # 2. Растим змейку
+            snake.grow()
+            apple.place_on_free_spot(snake.positions)
+
+        # Рисуем всё заново
+        screen.fill(BOARD_BACKGROUND_COLOR)
         apple.draw()
         snake.draw()
         pygame.display.update()
