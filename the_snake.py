@@ -34,14 +34,16 @@ class GameObject:
 
     def _draw_cell(self, fill_color, border=True, border_color=BORDER_COLOR):
         rect = pygame.Rect(self.position, (GRID_SIZE, GRID_SIZE))
-        # Если передан булевый False вместо кортежа цвета, пропускаем заливку
         if isinstance(fill_color, tuple):
             pygame.draw.rect(screen, fill_color, rect)
         if border:
-            pygame.draw.rect(screen, border_color, rect, CELL_BORDER_THICKNESS)
+            if border_color != BOARD_BACKGROUND_COLOR:
+                pygame.draw.rect(screen, border_color,
+                                 rect, CELL_BORDER_THICKNESS
+                                 )
 
     def draw(self):
-        """Отрисовывает объект на экране."""
+        """Заглушка."""
         pass
 
 
@@ -69,7 +71,6 @@ class Apple(GameObject):
         """Устанавливает новую позицию яблока."""
         apple_x, apple_y = self._get_random_grid_position(snake_positions)
         self.position = (apple_x, apple_y)
-        self._draw_cell(self.body_color)
 
     def draw(self):
         """Отрисовывает яблоко на игровой поверхности."""
@@ -113,8 +114,6 @@ class Snake(GameObject):
             tail_to_clear = self.positions.pop()
             temp_pos = self.position
             self.position = tail_to_clear
-            # --- ИСПРАВЛЕНИЕ ПУНКТА 2: очищаем фон корректно ---
-            # Передаем цвет заливки, иначе клетка останется прозрачной/битой
             self._draw_cell(fill_color=BOARD_BACKGROUND_COLOR,
                             border=True,
                             border_color=BOARD_BACKGROUND_COLOR
@@ -132,7 +131,7 @@ class Snake(GameObject):
             self.next_direction = None
 
     def reset(self):
-        """Сбрасывает состояние змейки к начальным значениям после смерти."""
+        """Очитска."""
         for pos in self.positions:
             temp_pos = self.position
             self.position = pos
@@ -163,11 +162,11 @@ class Snake(GameObject):
 
     def draw(self):
         """Отрисовывает змейку на экране."""
-        for pos in self.positions:
-            temp_pos = self.position
-            self.position = pos
-            self._draw_cell(self.body_color, border=True)
-            self.position = temp_pos
+        # 1. Рисуем новую голову
+        old_pos = self.position
+        self.position = self.positions[0]
+        self._draw_cell(self.body_color, border=True)
+        self.position = old_pos
 
 
 def handle_keys(game_object):
@@ -206,7 +205,6 @@ def main():
         if snake.check_self_collision():
             snake.reset()
             # При смерти убираем старое яблоко вручную
-            temp_pos = apple.position
             apple.position = apple.position
             # Но лучше очистить явно, чтобы не было артефактов
             temp_apple_draw = apple.position
@@ -216,17 +214,10 @@ def main():
         snake.move()
 
         if apple_eaten:
-            # 1. Стираем старое яблоко (координаты еще старые)
-            temp_pos = apple.position
-            apple.position = temp_pos
-            apple._draw_cell(BOARD_BACKGROUND_COLOR, border=False)
-
-            # 2. Растим змейку
             snake.grow()
             apple.place_on_free_spot(snake.positions)
 
         # Рисуем всё заново
-        screen.fill(BOARD_BACKGROUND_COLOR)
         apple.draw()
         snake.draw()
         pygame.display.update()
