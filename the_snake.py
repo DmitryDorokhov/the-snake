@@ -32,14 +32,18 @@ class GameObject:
         self.position = position
         self.body_color = body_color
 
-    def _draw_cell(self, fill_color, border=True, border_color=BORDER_COLOR):
+    def _draw_cell(self, fill_color=None,
+                   border=True, border_color=BORDER_COLOR
+                   ):
+        target_surface = screen
         rect = pygame.Rect(self.position, (GRID_SIZE, GRID_SIZE))
-        if isinstance(fill_color, tuple):
-            pygame.draw.rect(screen, fill_color, rect)
+        if fill_color is not None:
+            pygame.draw.rect(target_surface, fill_color, rect)
+
         if border:
             if border_color != BOARD_BACKGROUND_COLOR:
-                pygame.draw.rect(screen, border_color,
-                                 rect, CELL_BORDER_THICKNESS
+                pygame.draw.rect(target_surface,
+                                 border_color, rect, CELL_BORDER_THICKNESS
                                  )
 
     def draw(self):
@@ -57,7 +61,8 @@ class Apple(GameObject):
 
     def randomize_position(self, occupied_positions):
         """Находит случайную свободную ячейку на сетке."""
-        return self._draw_cell(BOARD_BACKGROUND_COLOR, border=False)
+        apple_x, apple_y = self._get_random_grid_position(occupied_positions)
+        self.position = (apple_x, apple_y)
 
     @staticmethod
     def _get_random_grid_position(occupied_positions):
@@ -95,8 +100,8 @@ class Snake(GameObject):
 
     def move(self):
         """
-        Перемещает змейку на один шаг вперед
-        и очищает освободившийся хвост.
+        Вычисляет новую позицию головы и обновляет список сегментов.
+        Больше не занимается очисткой экрана.
         """
         current_x, current_y = self.get_head_position()
         dx, dy = self.direction
@@ -104,21 +109,13 @@ class Snake(GameObject):
         new_y = (current_y + dy * GRID_SIZE) % SCREEN_HEIGHT
         new_head = (new_x, new_y)
 
-        # Определяем хвост до вставки головы
         if len(self.positions) >= self.length:
             self.last = self.positions[-1]
 
         self.positions.insert(0, new_head)
 
         if len(self.positions) > self.length and not self.grow_pending:
-            tail_to_clear = self.positions.pop()
-            temp_pos = self.position
-            self.position = tail_to_clear
-            self._draw_cell(fill_color=BOARD_BACKGROUND_COLOR,
-                            border=True,
-                            border_color=BOARD_BACKGROUND_COLOR
-                            )
-            self.position = temp_pos
+            self.positions.pop()
 
         self.grow_pending = False
 
@@ -131,15 +128,7 @@ class Snake(GameObject):
             self.next_direction = None
 
     def reset(self):
-        """Очитска."""
-        for pos in self.positions:
-            temp_pos = self.position
-            self.position = pos
-            self._draw_cell(fill_color=BOARD_BACKGROUND_COLOR,
-                            border=True,
-                            border_color=BOARD_BACKGROUND_COLOR
-                            )
-            self.position = temp_pos
+        """Очистка состояния при столкновении с собой."""
         self.length = 1
         self.positions = [(CENTER_X, CENTER_Y)]
         self.direction = RIGHT
@@ -161,12 +150,12 @@ class Snake(GameObject):
         self.grow_pending = True
 
     def draw(self):
-        """Отрисовывает змейку на экране."""
-        # 1. Рисуем новую голову
-        old_pos = self.position
-        self.position = self.positions[0]
-        self._draw_cell(self.body_color, border=True)
-        self.position = old_pos
+        """Отрисовывает все сегменты змейки."""
+        for pos in self.positions:
+            old_pos = self.position
+            self.position = pos
+            self._draw_cell(self.body_color, border=True)
+            self.position = old_pos
 
 
 def handle_keys(game_object):
@@ -191,33 +180,26 @@ def main():
     snake = Snake()
     apple = Apple()
 
-    # Устанавливаем начальную позицию яблока вне тела змейки
     apple.place_on_free_spot(snake.positions)
 
     while True:
         clock.tick(SPEED)
+        screen.fill(BOARD_BACKGROUND_COLOR)
         handle_keys(snake)
         snake.update_direction()
-
-        # Флаг фиксирует факт поедания ДО движения змеи
-        apple_eaten = snake.get_head_position() == apple.position
-
-        if snake.check_self_collision():
-            snake.reset()
-            # При смерти убираем старое яблоко вручную
-            apple.position = apple.position
-            # Но лучше очистить явно, чтобы не было артефактов
-            temp_apple_draw = apple.position
-            apple.position = temp_apple_draw
-            # Оставим это на совести цикла, главное — сброс змеи
-
         snake.move()
 
-        if apple_eaten:
+        # Проверяем смерть ПОСЛЕ движения
+        if snake.check_self_collision():
+            snake.reset()
+            apple.place_on_free_spot(snake.positions)
+            continue
+
+        # Проверяем поедание ПОСЛЕ движения
+        if snake.get_head_position() == apple.position:
             snake.grow()
             apple.place_on_free_spot(snake.positions)
 
-        # Рисуем всё заново
         apple.draw()
         snake.draw()
         pygame.display.update()
