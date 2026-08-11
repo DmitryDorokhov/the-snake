@@ -86,7 +86,7 @@ class Snake(GameObject):
 
     def __init__(self):
         super().__init__(position=(CENTER_X, CENTER_Y), body_color=SNAKE_COLOR)
-        self.length = 1
+        self.length = 2
         self.positions = [(CENTER_X, CENTER_Y)]
         self.direction = RIGHT
         self.next_direction = None
@@ -128,7 +128,8 @@ class Snake(GameObject):
 
     def reset(self):
         """Очистка состояния при столкновении с собой."""
-        self.length = 1
+        super().__init__(position=(CENTER_X, CENTER_Y), body_color=SNAKE_COLOR)
+        self.length = 2
         self.positions = [(CENTER_X, CENTER_Y)]
         self.direction = RIGHT
         self.next_direction = None
@@ -137,7 +138,8 @@ class Snake(GameObject):
 
     def check_self_collision(self):
         """Проверяет столкновение головы змейки с её собственным телом."""
-        return Snake.get_head_position(self) in self.positions[1:]
+        head = self.get_head_position()
+        return head in self.positions[1:]
 
     def grow(self):
         """
@@ -149,11 +151,17 @@ class Snake(GameObject):
 
     def draw(self):
         """Отрисовывает сегменты змейки."""
-        original_position = self.position
-        for pos in self.positions:
-            self.position = pos
-            self._draw_cell(self.body_color, border=True)
-        self.position = original_position
+        for position in self.positions[:-1]:
+            rect = (pygame.Rect(position, (GRID_SIZE, GRID_SIZE)))
+            pygame.draw.rect(screen, self.body_color, rect)
+            pygame.draw.rect(screen, BORDER_COLOR, rect, 1)
+        head_rect = pygame.Rect(self.positions[0], (GRID_SIZE, GRID_SIZE))
+        pygame.draw.rect(screen, self.body_color, head_rect)
+        pygame.draw.rect(screen, BORDER_COLOR, head_rect, 1)
+
+        if self.last:
+            last_rect = pygame.Rect(self.last, (GRID_SIZE, GRID_SIZE))
+            pygame.draw.rect(screen, BOARD_BACKGROUND_COLOR, last_rect)
 
 
 def handle_keys(game_object):
@@ -182,7 +190,7 @@ def main():
 
     while True:
         clock.tick(SPEED)
-
+        screen.fill(BOARD_BACKGROUND_COLOR)
         handle_keys(snake)
         snake.update_direction()
         snake.move()
@@ -193,14 +201,13 @@ def main():
             apple.place_on_free_spot(snake.positions)
 
         # Проверяем поедание ПОСЛЕ движения
-        if snake.get_head_position() == apple.position:
+        elif snake.get_head_position() == apple.position:
             snake.grow()
             apple.place_on_free_spot(snake.positions)
 
         apple.draw()
         snake.draw()
         pygame.display.update()
-        screen.fill(BOARD_BACKGROUND_COLOR)
 
 
 if __name__ == '__main__':
