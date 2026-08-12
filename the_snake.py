@@ -86,7 +86,7 @@ class Snake(GameObject):
 
     def __init__(self):
         super().__init__(position=(CENTER_X, CENTER_Y), body_color=SNAKE_COLOR)
-        self.length = 2
+        self.length = 1
         self.positions = [(CENTER_X, CENTER_Y)]
         self.direction = RIGHT
         self.next_direction = None
@@ -129,17 +129,13 @@ class Snake(GameObject):
     def reset(self):
         """Очистка состояния при столкновении с собой."""
         super().__init__(position=(CENTER_X, CENTER_Y), body_color=SNAKE_COLOR)
-        self.length = 2
+        self.length = 1
         self.positions = [(CENTER_X, CENTER_Y)]
         self.direction = RIGHT
         self.next_direction = None
         self.last = None
         self.grow_pending = False
-
-    def check_self_collision(self):
-        """Проверяет столкновение головы змейки с её собственным телом."""
-        head = self.get_head_position()
-        return head in self.positions[1:]
+        screen.fill(BOARD_BACKGROUND_COLOR)
 
     def grow(self):
         """
@@ -150,7 +146,7 @@ class Snake(GameObject):
         self.grow_pending = True
 
     def draw(self):
-        """Отрисовывает сегменты змейки."""
+        """Отрисовывает змейку."""
         for position in self.positions[:-1]:
             rect = (pygame.Rect(position, (GRID_SIZE, GRID_SIZE)))
             pygame.draw.rect(screen, self.body_color, rect)
@@ -190,20 +186,16 @@ def main():
 
     while True:
         clock.tick(SPEED)
-        screen.fill(BOARD_BACKGROUND_COLOR)
         handle_keys(snake)
         snake.update_direction()
         snake.move()
 
-        # Проверяем смерть ПОСЛЕ движения
-        if snake.check_self_collision():
-            snake.reset()
-            apple.place_on_free_spot(snake.positions)
-
-        # Проверяем поедание ПОСЛЕ движения
-        elif snake.get_head_position() == apple.position:
+        if snake.get_head_position() == apple.position:
             snake.grow()
             apple.place_on_free_spot(snake.positions)
+
+        if snake.get_head_position() in snake.positions[1:-1]:
+            snake.reset()
 
         apple.draw()
         snake.draw()
