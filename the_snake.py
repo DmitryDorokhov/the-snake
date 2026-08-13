@@ -146,14 +146,10 @@ class Snake(GameObject):
         self.grow_pending = True
 
     def draw(self):
-        """Отрисовывает змейку."""
-        for position in self.positions[:-1]:
-            rect = (pygame.Rect(position, (GRID_SIZE, GRID_SIZE)))
-            pygame.draw.rect(screen, self.body_color, rect)
-            pygame.draw.rect(screen, BORDER_COLOR, rect, 1)
-        head_rect = pygame.Rect(self.positions[0], (GRID_SIZE, GRID_SIZE))
-        pygame.draw.rect(screen, self.body_color, head_rect)
-        pygame.draw.rect(screen, BORDER_COLOR, head_rect, 1)
+        """Отрисовывает голову и хвост."""
+        rect = (pygame.Rect(self.get_head_position(), (GRID_SIZE, GRID_SIZE)))
+        pygame.draw.rect(screen, self.body_color, rect)
+        pygame.draw.rect(screen, BORDER_COLOR, rect, 1)
 
         if self.last:
             last_rect = pygame.Rect(self.last, (GRID_SIZE, GRID_SIZE))
@@ -190,11 +186,13 @@ def main():
         snake.update_direction()
         snake.move()
 
+        # Проверяем поедание ПОСЛЕ движения
         if snake.get_head_position() == apple.position:
             snake.grow()
             apple.place_on_free_spot(snake.positions)
 
-        if snake.get_head_position() in snake.positions[1:-1]:
+        # Проверяем смерть ПОСЛЕ движения
+        elif snake.get_head_position() in snake.positions[1:-1]:
             snake.reset()
 
         apple.draw()
