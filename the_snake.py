@@ -45,6 +45,19 @@ class GameObject:
                 CELL_BORDER_THICKNESS
             )
 
+    def draw_cell(self, position=None, color=None):
+        """Прорисовка ячеек."""
+        if position is None:
+            position = self.position
+        if color is None:
+            color = self.body_color
+        rect = pygame.Rect(position, (GRID_SIZE, GRID_SIZE))
+        pygame.draw.rect(screen, color, rect)
+
+        if color != BOARD_BACKGROUND_COLOR:
+            pygame.draw.rect(screen, SNAKE_COLOR, rect)
+            pygame.draw.rect(screen, BORDER_COLOR, rect, 1)
+
     def draw(self):
         """Заглушка."""
         pass
@@ -135,7 +148,6 @@ class Snake(GameObject):
         self.next_direction = None
         self.last = None
         self.grow_pending = False
-        screen.fill(BOARD_BACKGROUND_COLOR)
 
     def grow(self):
         """
@@ -147,13 +159,9 @@ class Snake(GameObject):
 
     def draw(self):
         """Отрисовывает голову и хвост."""
-        rect = (pygame.Rect(self.get_head_position(), (GRID_SIZE, GRID_SIZE)))
-        pygame.draw.rect(screen, self.body_color, rect)
-        pygame.draw.rect(screen, BORDER_COLOR, rect, 1)
-
+        self.draw_cell(self.get_head_position())
         if self.last:
-            last_rect = pygame.Rect(self.last, (GRID_SIZE, GRID_SIZE))
-            pygame.draw.rect(screen, BOARD_BACKGROUND_COLOR, last_rect)
+            self.draw_cell(self.last, BOARD_BACKGROUND_COLOR)
 
 
 def handle_keys(game_object):
@@ -194,6 +202,9 @@ def main():
         # Проверяем смерть ПОСЛЕ движения
         elif snake.get_head_position() in snake.positions[1:-1]:
             snake.reset()
+            # В Reset добавлять очитску нельзя, в каждом тике обновлять нельзя.
+            # Ума не приложу где очищать экран.
+            screen.fill(BOARD_BACKGROUND_COLOR)
 
         apple.draw()
         snake.draw()
