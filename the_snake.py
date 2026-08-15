@@ -185,7 +185,7 @@ def main():
     """Главная функция игры."""
     snake = Snake()
     apple = Apple()
-
+    screen.fill(BOARD_BACKGROUND_COLOR)
     apple.place_on_free_spot(snake.positions)
 
     while True:
@@ -202,8 +202,6 @@ def main():
         # Проверяем смерть ПОСЛЕ движения
         elif snake.get_head_position() in snake.positions[1:-1]:
             snake.reset()
-            # В Reset добавлять очитску нельзя, в каждом тике обновлять нельзя.
-            # Ума не приложу где очищать экран.
             screen.fill(BOARD_BACKGROUND_COLOR)
 
         apple.draw()
