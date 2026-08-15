@@ -32,19 +32,6 @@ class GameObject:
         self.position = position
         self.body_color = body_color
 
-    def _draw_cell(self, fill_color=None,
-                   border=True, border_color=BORDER_COLOR
-                   ):
-        rect = pygame.Rect(self.position, (GRID_SIZE, GRID_SIZE))
-        if fill_color is not None:
-            pygame.draw.rect(screen, fill_color, rect)
-
-        if border and border_color != BOARD_BACKGROUND_COLOR:
-            pygame.draw.rect(
-                screen, border_color, rect,
-                CELL_BORDER_THICKNESS
-            )
-
     def draw_cell(self, position=None, color=None):
         """Прорисовка ячеек."""
         if position is None:
@@ -89,9 +76,18 @@ class Apple(GameObject):
         apple_x, apple_y = self._get_random_grid_position(snake_positions)
         self.position = (apple_x, apple_y)
 
-    def draw(self):
-        """Отрисовывает яблоко на игровой поверхности."""
-        self._draw_cell(self.body_color)
+    def draw(self, fill_color=APPLE_COLOR, border=True,
+             border_color=BORDER_COLOR):
+        """Прорисовывает яблоко."""
+        rect = pygame.Rect(self.position, (GRID_SIZE, GRID_SIZE))
+        if fill_color is not None:
+            pygame.draw.rect(screen, fill_color, rect)
+
+        if border and border_color != BOARD_BACKGROUND_COLOR:
+            pygame.draw.rect(
+                screen, border_color, rect,
+                CELL_BORDER_THICKNESS
+            )
 
 
 class Snake(GameObject):
