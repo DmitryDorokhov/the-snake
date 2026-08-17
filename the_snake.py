@@ -79,8 +79,8 @@ class Apple(GameObject):
     def draw(self, fill_color=APPLE_COLOR):
         """Прорисовывает яблоко."""
         rect = pygame.Rect(self.position, (GRID_SIZE, GRID_SIZE))
-        if fill_color is not None:
-            pygame.draw.rect(screen, fill_color, rect)
+        pygame.draw.rect(screen, self.body_color, rect)
+        pygame.draw.rect(screen, BORDER_COLOR, rect, 1)
 
 
 class Snake(GameObject):
