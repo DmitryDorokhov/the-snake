@@ -44,6 +44,8 @@ class GameObject:
         if color != BOARD_BACKGROUND_COLOR:
             pygame.draw.rect(screen, SNAKE_COLOR, rect)
             pygame.draw.rect(screen, BORDER_COLOR, rect, 1)
+        if color == APPLE_COLOR:
+            pygame.draw.rect(screen, APPLE_COLOR, rect)
 
     def draw(self):
         """Заглушка."""
@@ -78,9 +80,7 @@ class Apple(GameObject):
 
     def draw(self, fill_color=APPLE_COLOR):
         """Прорисовывает яблоко."""
-        rect = pygame.Rect(self.position, (GRID_SIZE, GRID_SIZE))
-        pygame.draw.rect(screen, self.body_color, rect)
-        pygame.draw.rect(screen, BORDER_COLOR, rect, 1)
+        self.draw_cell(self.position, fill_color)
 
 
 class Snake(GameObject):
